@@ -31,6 +31,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
+import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
@@ -120,7 +121,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void convertBitmapToPdf(Bitmap bitmap, String pdfFileName) {
         ProgressBar progressBar = findViewById(R.id.progressBar);
-        // Mostrar el ProgressBar en el hilo de UI
         runOnUiThread(() -> progressBar.setVisibility(View.VISIBLE));
 
         new Thread(() -> {
@@ -149,15 +149,12 @@ public class MainActivity extends AppCompatActivity {
                         createPdf(bitmap, writer);
                     }
                 }
-                // Mostrar mensaje de éxito en el hilo de UI
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "PDF generado correctamente.", Toast.LENGTH_SHORT).show());
             } catch (Exception e) {
                 e.printStackTrace();
                 Log.e("MainActivity", "Error al guardar el PDF.", e);
-                // Mostrar mensaje de error en el hilo de UI
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error al generar el PDF.", Toast.LENGTH_SHORT).show());
             } finally {
-                // Ocultar el ProgressBar en el hilo de UI
                 runOnUiThread(() -> progressBar.setVisibility(View.GONE));
             }
         }).start();
@@ -168,22 +165,28 @@ public class MainActivity extends AppCompatActivity {
 
     private void createPdf(Bitmap bitmap, PdfWriter writer) {
         PdfDocument pdfDocument = new PdfDocument(writer);
-        Document document = new Document(pdfDocument);
-        try {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
-            byte[] imageData = byteArrayOutputStream.toByteArray();
-            ImageData data = ImageDataFactory.create(imageData);
-            Image image = new Image(data);
-            document.add(image);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Log.e("MainActivity", "Error al añadir la imagen al PDF.", e);
-        } finally {
-            document.close();
-        }
-        Log.d("MainActivity", "PDF guardado.");
+        PageSize pageSize = PageSize.A4;
+        Document document = new Document(pdfDocument, pageSize);
+        document.setMargins(0, 0, 0, 0);
+
+        // Convertir el bitmap a un byte array
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+        byte[] imageData = byteArrayOutputStream.toByteArray();
+
+        // Crear la imagen con iText
+        ImageData data = ImageDataFactory.create(imageData);
+        Image image = new Image(data);
+
+        image.scaleAbsolute(pageSize.getWidth(), pageSize.getHeight());
+        image.setFixedPosition(0, 0);
+
+        document.add(image);
+
+        document.close();
     }
+
+
 
     private void promptForFileName(Bitmap bitmap) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
