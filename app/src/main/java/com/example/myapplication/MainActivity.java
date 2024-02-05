@@ -1,11 +1,13 @@
 package com.example.myapplication;
 
 import android.Manifest;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -26,7 +28,6 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Image;
-import com.itextpdf.layout.property.HorizontalAlignment;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -43,7 +44,6 @@ public class MainActivity extends AppCompatActivity {
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK) {
-                    // La imagen fue capturada y guardada en el Uri proporcionado.
                     Bitmap imageBitmap = getBitmapFromUri(photoURI);
                     convertBitmapToPdf(imageBitmap);
                 }
@@ -115,46 +115,56 @@ public class MainActivity extends AppCompatActivity {
 
     private void convertBitmapToPdf(Bitmap bitmap) {
         try {
-            File pdfDir = new File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "MyApp");
-            if (!pdfDir.exists()) pdfDir.mkdir();
-            File pdfFile = new File(pdfDir, "image_to_pdf.pdf");
+            String pdfFileName = "image_to_pdf.pdf";
 
-            Log.d("MainActivity", "PDF directory: " + pdfDir.getAbsolutePath());
-            Log.d("MainActivity", "PDF file path: " + pdfFile.getAbsolutePath());
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.MediaColumns.DISPLAY_NAME, pdfFileName);
+                values.put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf");
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + File.separator + "MyApp");
 
-            PdfWriter writer = new PdfWriter(new FileOutputStream(pdfFile));
-            PdfDocument pdfDocument = new PdfDocument(writer);
-            Document document = new Document(pdfDocument);
+                Uri uri = getContentResolver().insert(MediaStore.Files.getContentUri("external"), values);
 
-            float pdfWidth = 595;
-            float pdfHeight = 842;
-            float imageWidth = bitmap.getWidth();
-            float imageHeight = bitmap.getHeight();
-            float scaleFactor = Math.min(pdfWidth / imageWidth, pdfHeight / imageHeight);
+                if (uri != null) {
+                    PdfWriter writer = new PdfWriter(getContentResolver().openOutputStream(uri));
+                    createPdf(bitmap, writer);
+                }
+            } else {
+                File documentsDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "MyApp");
+                if (!documentsDir.exists()) documentsDir.mkdirs();
+                File pdfFile = new File(documentsDir, pdfFileName);
 
-
-            imageWidth = imageWidth * scaleFactor;
-            imageHeight = imageHeight * scaleFactor;
-
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
-            byte[] imageData = byteArrayOutputStream.toByteArray();
-            ImageData data = ImageDataFactory.create(imageData);
-            Image image = new Image(data).scaleToFit(imageWidth, imageHeight);
-
-            image.setHorizontalAlignment(HorizontalAlignment.CENTER);
-            float verticalPosition = (pdfHeight - imageHeight) / 2;
-            image.setFixedPosition((pdfWidth - imageWidth) / 2, verticalPosition);
-
-            document.add(image);
-
-            document.close();
-            Log.d("MainActivity", "PDF guardado en: " + pdfFile.getAbsolutePath());
+                PdfWriter writer = new PdfWriter(new FileOutputStream(pdfFile));
+                createPdf(bitmap, writer);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             Log.e("MainActivity", "Error al guardar el PDF.", e);
         }
     }
+
+    private void createPdf(Bitmap bitmap, PdfWriter writer) {
+        PdfDocument pdfDocument = new PdfDocument(writer);
+        Document document = new Document(pdfDocument);
+        try {
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+            byte[] imageData = byteArrayOutputStream.toByteArray();
+            ImageData data = ImageDataFactory.create(imageData);
+            Image image = new Image(data);
+            document.add(image);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.e("MainActivity", "Error al añadir la imagen al PDF.", e);
+        } finally {
+            if (document != null) {
+                document.close();
+            }
+        }
+        Log.d("MainActivity", "PDF guardado.");
+    }
+
+
 
 
 
@@ -176,7 +186,6 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("Permiso denegado")
                 .setMessage("Este permiso es necesario para capturar fotos. Por favor, habilita el permiso desde la configuración de la aplicación.")
                 .setPositiveButton("Configuración", (dialog, which) -> {
-                    // Intent para abrir la pantalla de configuración de la aplicación
                     Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                     Uri uri = Uri.fromParts("package", getPackageName(), null);
                     intent.setData(uri);
