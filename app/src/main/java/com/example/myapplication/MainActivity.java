@@ -126,13 +126,26 @@ public class MainActivity extends AppCompatActivity {
             PdfDocument pdfDocument = new PdfDocument(writer);
             Document document = new Document(pdfDocument);
 
+            float pdfWidth = 595;
+            float pdfHeight = 842;
+            float imageWidth = bitmap.getWidth();
+            float imageHeight = bitmap.getHeight();
+            float scaleFactor = Math.min(pdfWidth / imageWidth, pdfHeight / imageHeight);
+
+
+            imageWidth = imageWidth * scaleFactor;
+            imageHeight = imageHeight * scaleFactor;
+
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
             byte[] imageData = byteArrayOutputStream.toByteArray();
             ImageData data = ImageDataFactory.create(imageData);
-            Image image = new Image(data);
+            Image image = new Image(data).scaleToFit(imageWidth, imageHeight);
 
             image.setHorizontalAlignment(HorizontalAlignment.CENTER);
+            float verticalPosition = (pdfHeight - imageHeight) / 2;
+            image.setFixedPosition((pdfWidth - imageWidth) / 2, verticalPosition);
+
             document.add(image);
 
             document.close();
@@ -142,6 +155,7 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MainActivity", "Error al guardar el PDF.", e);
         }
     }
+
 
 
     @Override
